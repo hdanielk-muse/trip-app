@@ -2,6 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>트립 정산 앱</title>
   <link rel="manifest" href="manifest.json">
   <style>
@@ -87,6 +88,7 @@
     }
     #total { font-size: 36px; color: #ffd54f; font-weight: bold; line-height: 1.8; }
     #calcMsg { font-size: 22px; color: #a5d6a7; margin: 5px 0; min-height: 28px; }
+    #rateMsg { font-size: 22px; color: #90caf9; margin: 5px 0; min-height: 28px; }
     .net { color: #ffd54f; font-weight: bold; font-size: 30px; }
   </style>
 </head>
@@ -96,7 +98,7 @@
   <div class="row tight">
     <div class="f1">
       <label>트립번호</label>
-      <input type="text" id="tripNum" placeholder="440000">
+      <input type="text" id="tripNum" placeholder="T-1024">
     </div>
     <div class="f1">
       <label>날짜</label>
@@ -108,7 +110,7 @@
     </div>
     <div class="f1">
       <label>FSC</label>
-      <input type="number" id="fsc" step="0.001" placeholder="0.815">
+      <input type="number" id="fsc" step="0.001" placeholder="0.450">
     </div>
   </div>
 
@@ -145,22 +147,32 @@
   <div class="exp-box">
     <div class="row tight">
       <div class="f1">
+        <label>주유 날짜</label>
+        <input type="date" id="expDate" onchange="fetchRate()">
+      </div>
+      <div class="f1">
         <label>국가</label>
         <select id="expCountry" onchange="updateExpLabels()">
           <option value="US">🇺🇸 미국</option>
           <option value="CA">🇨🇦 캐나다</option>
         </select>
       </div>
-      <div class="f1">
-        <label>환율</label>
-        <input type="number" id="xrate" step="0.001" placeholder="1.38">
-      </div>
     </div>
     <div class="row tight">
+      <div class="f1">
+        <label>환율</label>
+        <input type="number" id="xrate" step="0.0001" placeholder="자동">
+      </div>
+      <div class="f0">
+        <button class="btn calc" onclick="fetchRate()">🔄</button>
+      </div>
       <div class="f1">
         <label>종류</label>
         <select id="expType"><option>디젤</option><option>DEF</option></select>
       </div>
+    </div>
+    <p id="rateMsg"></p>
+    <div class="row tight">
       <div class="f1">
         <label id="expQtyLabel">수량(갤런)</label>
         <input type="number" id="expQty" step="0.01">
@@ -180,8 +192,9 @@
 
   <script>
     if ('serviceWorker' in navigator) {
-navigator.serviceWorker.register('sw.js');
-}
+      navigator.serviceWorker.register('sw.js');
+    }
+
     let trips = [];
     let expenses = [];
     const GAL_TO_L = 3.78541;
@@ -258,10 +271,36 @@ navigator.serviceWorker.register('sw.js');
         (c === 'US') ? '단가(USD)' : '단가(CAD)';
     }
 
+    async function fetchRate() {
+      let dateStr = document.getElementById('expDate').value;
+      let msg = document.getElementById('rateMsg');
+      if (!dateStr) {
+        msg.textContent = '주유 날짜를 먼저 입력해줘';
+        return;
+      }
+      msg.textContent = '환율 가져오는 중...';
+      try {
+        let res = await fetch('https://api.frankfurter.app/' + dateStr + '?from=USD&to=CAD');
+        let data = await res.json();
+        let rate = data.rates.CAD;
+        document.getElementById('xrate').value = rate.toFixed(4);
+        msg.textContent = (data.date === dateStr)
+          ? dateStr + ' 환율 ' + rate.toFixed(4)
+          : dateStr + '은 휴장일이라 ' + data.date + ' 환율 ' + rate.toFixed(4) + ' 적용';
+      } catch (e) {
+        msg.textContent = '자동 가져오기 실패 — 직접 입력해줘';
+      }
+    }
+
     function addExpense() {
       let tripNum = document.getElementById('tripNum').value.trim();
       if (!tripNum) {
         alert('맨 위에 트립번호를 입력해줘');
+        return;
+      }
+      let expDate = document.getElementById('expDate').value;
+      if (!expDate) {
+        alert('주유 날짜를 입력해줘');
         return;
       }
       let type = document.getElementById('expType').value;
@@ -282,8 +321,8 @@ navigator.serviceWorker.register('sw.js');
         liters = qty;
         totalCAD = qty * price;
       }
-      expenses.push({tripNum: tripNum, type: type, country: country,
-        qty: qty, price: price, liters: liters, totalCAD: totalCAD});
+      expenses.push({tripNum: tripNum, date: expDate, type: type, country: country,
+        qty: qty, price: price, xrate: xrate, liters: liters, totalCAD: totalCAD});
       render();
 
       document.getElementById('expQty').value = '';
@@ -322,9 +361,10 @@ navigator.serviceWorker.register('sw.js');
         let flag = (f.country === 'US') ? '🇺🇸' : '🇨🇦';
         let cur = (f.country === 'US') ? 'US$' : 'C$';
         let li = document.createElement('li');
-        li.textContent = '[' + f.tripNum + '] ' + f.type + ' ' + flag +
+        li.textContent = '[' + f.tripNum + '] ' + f.date + ' ' + f.type + ' ' + flag +
           ': ' + f.qty + unit + ' × ' + cur + f.price.toFixed(3) +
-          ' = C$' + f.totalCAD.toFixed(2) + ' (' + Math.round(f.liters) + 'L)';
+          ' = C$' + f.totalCAD.toFixed(2) +
+          ' (' + Math.round(f.liters) + 'L, 환율 ' + f.xrate.toFixed(4) + ')';
         el.appendChild(li);
       });
     }
@@ -353,15 +393,16 @@ navigator.serviceWorker.register('sw.js');
           t.rate.toFixed(3), t.fsc.toFixed(3), t.pay.toFixed(2)]);
       });
       rows.push([]);
-      rows.push(['트립번호', '연료종류', '국가', '수량', '단위',
-        '단가', '통화', '리터(L)', '경비(C$)']);
+      rows.push(['트립번호', '주유날짜', '연료종류', '국가', '수량', '단위',
+        '단가', '통화', '적용환율', '리터(L)', '경비(C$)']);
       expenses.forEach(function(f) {
-        rows.push([f.tripNum, f.type,
+        rows.push([f.tripNum, f.date, f.type,
           (f.country === 'US') ? '미국' : '캐나다',
           f.qty,
           (f.country === 'US') ? '갤런' : '리터',
           f.price.toFixed(3),
           (f.country === 'US') ? 'USD' : 'CAD',
+          f.xrate.toFixed(4),
           f.liters.toFixed(1),
           f.totalCAD.toFixed(2)]);
       });
@@ -389,6 +430,8 @@ navigator.serviceWorker.register('sw.js');
         String(d.getMonth() + 1).padStart(2, '0') + '-' +
         String(d.getDate()).padStart(2, '0');
       document.getElementById('tripDate').value = today;
+      document.getElementById('expDate').value = today;
+      fetchRate();
     })();
     render();
   </script>
