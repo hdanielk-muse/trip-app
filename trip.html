@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>트립 정산 앱</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #1a2332;
+      color: white;
+      text-align: center;
+      padding: 15px;
+    }
+    h1 { font-size: 48px; }
+    h2 { font-size: 40px; }
+    label {
+      display: block;
+      font-size: 28px;
+      margin: 15px 0 5px;
+      color: #90caf9;
+      text-align: left;
+    }
+    input {
+      width: 94%;
+      font-size: 32px;
+      padding: 15px;
+      border-radius: 10px;
+      border: none;
+      margin-bottom: 5px;
+    }
+    .btn {
+      display: block;
+      width: 96%;
+      margin: 20px auto;
+      padding: 22px;
+      font-size: 40px;
+      background: #1565c0;
+      color: white;
+      border: none;
+      border-radius: 12px;
+    }
+    #tripList { list-style: none; padding: 0; }
+    #tripList li {
+      background: #2d3a4f;
+      margin: 10px auto;
+      padding: 15px;
+      width: 96%;
+      border-radius: 12px;
+      font-size: 26px;
+      text-align: left;
+    }
+    .fsc-box {
+      background: #0d47a1;
+      padding: 15px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+    #total { font-size: 40px; color: #ffd54f; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>🚛 트립 정산</h1>
+
+  <div class="fsc-box">
+    <label>이번 주 FSC ($/mile)</label>
+    <input type="number" id="fsc" step="0.01" placeholder="0.45">
+  </div>
+
+  <label>날짜</label>
+  <input type="date" id="tripDate">
+  <label>출발지</label>
+  <input type="text" id="origin" placeholder="예: Toronto, ON">
+  <label>도착지</label>
+  <input type="text" id="dest" placeholder="예: Chicago, IL">
+  <label>마일수</label>
+  <input type="number" id="miles" placeholder="예: 520">
+  <label>기본 운임 ($/mile)</label>
+  <input type="number" id="rate" step="0.01" placeholder="예: 2.10">
+
+  <button class="btn" onclick="addTrip()">트립 추가</button>
+
+  <h2>트립 목록</h2>
+  <ul id="tripList"></ul>
+  <p id="total"></p>
+
+  <script>
+    let trips = [];
+
+    function addTrip() {
+      let date = document.getElementById('tripDate').value;
+      let origin = document.getElementById('origin').value;
+      let dest = document.getElementById('dest').value;
+      let miles = parseFloat(document.getElementById('miles').value);
+      let rate = parseFloat(document.getElementById('rate').value);
+      let fsc = parseFloat(document.getElementById('fsc').value) || 0;
+
+      if (!date || !origin || !dest || !miles || !rate) {
+        alert('다 입력해줘');
+        return;
+      }
+
+      let pay = miles * (rate + fsc);
+      trips.push({date: date, origin: origin, dest: dest,
+        miles: miles, rate: rate, fsc: fsc, pay: pay});
+      render();
+
+      document.getElementById('tripDate').value = '';
+      document.getElementById('origin').value = '';
+      document.getElementById('dest').value = '';
+      document.getElementById('miles').value = '';
+      document.getElementById('rate').value = '';
+    }
+
+    function render() {
+      let ul = document.getElementById('tripList');
+      ul.innerHTML = '';
+      let total = 0;
+      for (let t of trips) {
+        total += t.pay;
+        let li = document.createElement('li');
+        li.textContent = t.date + ': ' + t.origin + ' → ' + t.dest +
+          ' (' + t.miles + '마일) = $' + t.pay.toFixed(2);
+        ul.appendChild(li);
+      }
+      document.getElementById('total').textContent =
+        trips.length > 0 ? '합계: $' + total.toFixed(2) : '';
+    }
+  </script>
+</body>
+</html>
