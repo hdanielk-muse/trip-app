@@ -1,4 +1,4 @@
-const CACHE = 'trip-app-v1';
+const CACHE = 'trip-app-v2';
 const FILES = [
   './',
   'index.html',
