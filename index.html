@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>트립 정산 앱</title>
+  <link rel="manifest" href="manifest.json">
   <style>
     body {
       font-family: sans-serif;
@@ -178,6 +179,9 @@
   <button class="btn excel" onclick="exportCSV()">📥 엑셀로 내보내기</button>
 
   <script>
+    if ('serviceWorker' in navigator) {
+navigator.serviceWorker.register('sw.js');
+}
     let trips = [];
     let expenses = [];
     const GAL_TO_L = 3.78541;
