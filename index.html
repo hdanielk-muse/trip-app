@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>트립 정산 앱</title>
   <link rel="manifest" href="manifest.json">
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     body {
       font-family: sans-serif;
@@ -88,7 +89,7 @@
     }
     #total { font-size: 36px; color: #ffd54f; font-weight: bold; line-height: 1.8; }
     #calcMsg { font-size: 22px; color: #a5d6a7; margin: 5px 0; min-height: 28px; }
-    #rateMsg { font-size: 22px; color: #90caf9; margin: 5px 0; min-height: 28px; }
+    #rateMsg, #ocrMsg { font-size: 22px; color: #90caf9; margin: 5px 0; min-height: 28px; }
     .net { color: #ffd54f; font-weight: bold; font-size: 30px; }
   </style>
 </head>
@@ -98,7 +99,7 @@
   <div class="row tight">
     <div class="f1">
       <label>트립번호</label>
-      <input type="text" id="tripNum" placeholder="440000">
+      <input type="text" id="tripNum" placeholder="T-1024">
     </div>
     <div class="f1">
       <label>날짜</label>
@@ -110,7 +111,7 @@
     </div>
     <div class="f1">
       <label>FSC</label>
-      <input type="number" id="fsc" step="0.001" placeholder=".185">
+      <input type="number" id="fsc" step="0.001" placeholder="0.450">
     </div>
   </div>
 
@@ -182,6 +183,9 @@
         <input type="number" id="expPrice" step="0.001">
       </div>
     </div>
+    <button class="btn" onclick="document.getElementById('receiptFile').click()">📷 영수증 스캔</button>
+    <input type="file" id="receiptFile" accept="image/*" style="display:none" onchange="scanReceipt()">
+    <p id="ocrMsg"></p>
     <button class="btn calc" onclick="addExpense()">경비 추가</button>
   </div>
 
@@ -289,6 +293,65 @@
           : dateStr + '은 휴장일이라 ' + data.date + ' 환율 ' + rate.toFixed(4) + ' 적용';
       } catch (e) {
         msg.textContent = '자동 가져오기 실패 — 직접 입력해줘';
+      }
+    }
+
+    async function scanReceipt() {
+      let file = document.getElementById('receiptFile').files[0];
+      if (!file) return;
+      let msg = document.getElementById('ocrMsg');
+      if (typeof Tesseract === 'undefined') {
+        msg.textContent = 'OCR 로딩 실패 (인터넷 필요) — 직접 입력해줘';
+        return;
+      }
+      msg.textContent = '영수증 읽는 중... (처음엔 20초쯤 걸려)';
+      try {
+        let result = await Tesseract.recognize(file, 'eng');
+        parseReceipt(result.data.text);
+      } catch (e) {
+        msg.textContent = '인식 실패 — 직접 입력해줘';
+      }
+      document.getElementById('receiptFile').value = '';
+    }
+
+    function parseReceipt(text) {
+      let msg = document.getElementById('ocrMsg');
+      let t = ' ' + text + ' ';
+
+      function grab(re) {
+        let m = t.match(re);
+        return m ? parseFloat(m[1]) : null;
+      }
+
+      let qty = null, isL = false, price = null;
+
+      // "45.230 GAL @ 3.899" 형태
+      let m = t.match(/(\d+\.\d+)\s*(gal|l)\b[^@\n]{0,10}@\s*\$?\s*(\d+\.\d+)/i);
+      if (m) {
+        qty = parseFloat(m[1]);
+        isL = (m[2].toLowerCase() === 'l');
+        price = parseFloat(m[3]);
+      } else {
+        let liters = grab(/(?:litres?|liters?)\D{0,5}(\d+\.\d+)/i);
+        let gallons = grab(/(?:gallons?|\bgal\b)\D{0,5}(\d+\.\d+)/i);
+        if (liters) { qty = liters; isL = true; }
+        else if (gallons) { qty = gallons; }
+        price = grab(/(?:price\s*\/\s*(?:gal|l)|per\s*(?:gal|l)|\/(?:gal|l)\b|unit\s*price)\D{0,5}(\d+\.\d+)/i);
+        if (!price) {
+          let total = grab(/(?:total|amount(?:\s*due)?)\D{0,5}(\d+\.\d{2})/i);
+          if (total && qty) price = total / qty;
+        }
+      }
+
+      if (qty) {
+        document.getElementById('expCountry').value = isL ? 'CA' : 'US';
+        updateExpLabels();
+        document.getElementById('expQty').value = qty.toFixed(2);
+        if (price) document.getElementById('expPrice').value = price.toFixed(3);
+        msg.textContent = '인식됨: ' + qty.toFixed(2) + (isL ? '리터' : '갤런') +
+          (price ? ' × $' + price.toFixed(3) : '') + ' — 확인하고 수정해줘';
+      } else {
+        msg.textContent = '숫자를 못 찾았어. 밝은 곳에서 다시 찍어줘';
       }
     }
 
