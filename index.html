@@ -6,6 +6,7 @@
   <title>트립 정산 앱</title>
   <link rel="manifest" href="manifest.json">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <style>
     body {
       font-family: sans-serif;
@@ -184,7 +185,7 @@
       </div>
     </div>
     <button class="btn" onclick="document.getElementById('receiptFile').click()">📷 영수증 스캔</button>
-    <input type="file" id="receiptFile" accept="image/*" style="display:none" onchange="scanReceipt()">
+    <input type="file" id="receiptFile" accept="image/*,application/pdf" style="display:none" onchange="scanReceipt()">
     <p id="ocrMsg"></p>
     <button class="btn calc" onclick="addExpense()">경비 추가</button>
   </div>
@@ -296,6 +297,20 @@
       }
     }
 
+    async function pdfToImage(file) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+      let buf = await file.arrayBuffer();
+      let pdf = await pdfjsLib.getDocument({data: buf}).promise;
+      let page = await pdf.getPage(1);
+      let viewport = page.getViewport({scale: 2.5});
+      let canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({canvasContext: canvas.getContext('2d'), viewport: viewport}).promise;
+      return canvas;
+    }
+
     async function scanReceipt() {
       let file = document.getElementById('receiptFile').files[0];
       if (!file) return;
@@ -304,9 +319,20 @@
         msg.textContent = 'OCR 로딩 실패 (인터넷 필요) — 직접 입력해줘';
         return;
       }
-      msg.textContent = '영수증 읽는 중... (처음엔 20초쯤 걸려)';
       try {
-        let result = await Tesseract.recognize(file, 'eng');
+        let image = file;
+        let isPdf = file.type === 'application/pdf' ||
+          file.name.toLowerCase().endsWith('.pdf');
+        if (isPdf) {
+          if (typeof pdfjsLib === 'undefined') {
+            msg.textContent = 'PDF 로딩 실패 (인터넷 필요) — 직접 입력해줘';
+            return;
+          }
+          msg.textContent = 'PDF 변환 중...';
+          image = await pdfToImage(file);
+        }
+        msg.textContent = '영수증 읽는 중... (처음엔 20초쯤 걸려)';
+        let result = await Tesseract.recognize(image, 'eng');
         parseReceipt(result.data.text);
       } catch (e) {
         msg.textContent = '인식 실패 — 직접 입력해줘';
