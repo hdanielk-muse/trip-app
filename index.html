@@ -98,7 +98,7 @@
   <div class="row tight">
     <div class="f1">
       <label>트립번호</label>
-      <input type="text" id="tripNum" placeholder="44000">
+      <input type="text" id="tripNum" placeholder="T-1024">
     </div>
     <div class="f1">
       <label>날짜</label>
@@ -110,7 +110,7 @@
     </div>
     <div class="f1">
       <label>FSC</label>
-      <input type="number" id="fsc" step="0.001" placeholder="0.185">
+      <input type="number" id="fsc" step="0.001" placeholder="0.450">
     </div>
   </div>
 
@@ -280,7 +280,7 @@
       }
       msg.textContent = '환율 가져오는 중...';
       try {
-        let res = await fetch('https://api.frankfurter.app/' + dateStr + '?from=USD&to=CAD');
+        let res = await fetch('https://api.frankfurter.dev/v1/' + dateStr + '?from=USD&to=CAD');
         let data = await res.json();
         let rate = data.rates.CAD;
         document.getElementById('xrate').value = rate.toFixed(4);
